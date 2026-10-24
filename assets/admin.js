@@ -53,9 +53,14 @@ const minutes = (n) => Math.max(1, Math.round(Number(n || 0) / 400));
 
 /* ---------- 与 GitHub 通信 ---------- */
 
-function friendly(status, message) {
+function friendly(status, message = '') {
   if (status === 401) return '令牌无效或已过期，请重新登录。';
-  if (status === 403) return '令牌没有写权限，或短时间内请求过多，请稍后再试。';
+  if (status === 403) {
+    if (/Resource not accessible by personal access token/i.test(message))
+      return '令牌只有读权限：请到 GitHub 把该令牌的 Contents 改成「Read and write」，保存后回这里重新登录。';
+    if (/rate limit|abuse/i.test(message)) return '请求过于频繁（GitHub 限流），请等几分钟再试。';
+    return `令牌没有写权限，或请求被拒绝（${message || '403'}）。请检查令牌的 Contents 权限。`;
+  }
   if (status === 404) return '找不到内容：令牌可能没有这个仓库的权限。';
   if (status === 409 || status === 422) return '提交冲突：仓库刚刚被改过，请再试一次。';
   return message || `请求失败（HTTP ${status}）`;
@@ -603,6 +608,20 @@ async function signIn(candidate, remember) {
   if (!repo.permissions?.push) {
     token = '';
     throw new Error(`令牌能读到 ${OWNER}/${REPO}，但没有写权限。请在令牌里把 Contents 设为 Read and write。`);
+  }
+  // 真正试一次写：建一个空 blob。空内容的 sha 是固定的，不会占用仓库空间，也不进入任何 commit。
+  // （fine-grained 令牌返回的 repo.permissions 反映的是你在仓库里的角色，不是令牌范围，不能用来判断。）
+  try {
+    await gh(`${REPO_PATH}/git/blobs`, { method: 'POST', body: { content: '', encoding: 'utf-8' } });
+  } catch (e) {
+    if (e.status === 403) {
+      token = '';
+      throw new Error(
+        '这个令牌只有读权限。请到 GitHub → Settings → Developer settings → Fine-grained tokens 打开该令牌，' +
+          '把 Repository permissions 里的 Contents 改成 Read and write，保存后回来重新登录。',
+      );
+    }
+    throw e;
   }
   try {
     localStorage.removeItem(TOKEN_KEY);
