@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN" data-ef-variant="standard">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>404 · 枫叶随风的博客</title>
+    <meta name="description" content="这一页不在记录里：你打开的地址没有对应的页面。" />
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
+    <script>
+      try {
+        const t = localStorage.getItem('theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+    <meta name="theme-color" content="#F4F4F2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)" />
+    <script src="./assets/variant.js"></script>
+    <link rel="stylesheet" href="./assets/endfield.css" />
+    <link rel="stylesheet" href="./assets/site.css" />
+  </head>
+  <body class="ef ef-contours">
+    <div class="ef-tri" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="shell">
+      <nav class="ef-rail rail" aria-label="主导航">
+        <a class="brand" href="./index.html"><small>Maple in Wind</small><span>枫叶随风</span></a>
+        <a href="./index.html">首页</a>
+        <a href="./index.html">文章</a>
+        <a href="./index.html#about">关于</a>
+        <a href="https://github.com/fysfqyl/page-zero">仓库</a>
+        <div class="rail-util">
+          <button class="ef-btn small" type="button" data-theme-toggle>切换深浅</button>
+        </div>
+      </nav>
+
+      <article class="ef-spread">
+        <div class="ef-sheet">
+          <p class="ef-eyebrow slash">404 / Not Found</p>
+          <header class="ef-sheet-head">
+            <h1 class="ef-read">这一页不在记录里</h1>
+            <p class="ef-field">No.404</p>
+          </header>
+          <p class="ef-lede ef-read">你打开的地址没有对应的页面。它可能改过地址，也可能从来没有存在过。回到首页，从最近记录里继续读。</p>
+          <p class="ef-actions nav-actions">
+            <a class="ef-btn go" href="./index.html">回到首页</a>
+            <a class="ef-btn" href="./posts/p001.html">读最新一篇<span class="sub">No.001</span></a>
+          </p>
+        </div>
+
+        <aside class="ef-margin" aria-label="统计与说明">
+          <h2 class="ef-field margin-h">建站</h2>
+          <ul class="ef-ledger">
+            <li><span>托管</span><span class="ef-field">GitHub Pages</span></li>
+            <li><span>最后更新</span><span class="ef-field">2026.10.24</span></li>
+          </ul>
+        </aside>
+      </article>
+    </div>
+
+    <script type="module">
+      import { wireTheme, wireReadouts } from './assets/fx.js';
+      wireTheme();
+      wireReadouts(document);
+    </script>
+  </body>
+</html>
