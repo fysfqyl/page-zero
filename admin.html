@@ -112,6 +112,27 @@
         margin: 0 0 1rem;
         padding-left: 1.4rem;
       }
+      .admin-editor figure {
+        margin: 1rem 0;
+      }
+      .admin-editor img {
+        display: block;
+        max-width: 100%;
+        height: auto;
+        border: 1px solid var(--ef-rule);
+      }
+      .admin-editor figcaption {
+        margin-top: 0.4rem;
+        font-family: var(--ef-font-ui);
+        font-size: 0.82rem;
+        color: var(--ef-ink-2);
+      }
+      .admin-upload {
+        margin: 0.35rem 0 0;
+        font-family: var(--ef-font-ui);
+        font-size: 0.8rem;
+        color: var(--ef-ink-2);
+      }
       .admin-editor:focus {
         outline: 2px solid var(--ef-trace);
         outline-offset: -1px;
@@ -295,13 +316,16 @@
                   <button class="ef-btn small" type="button" data-cmd="formatBlock" data-value="blockquote">引用</button>
                   <button class="ef-btn small" type="button" data-cmd="insertUnorderedList">列表</button>
                   <button class="ef-btn small" type="button" data-cmd="insertOrderedList">编号</button>
+                  <button class="ef-btn small" type="button" id="btn-image">图片</button>
                   <button class="ef-btn small" type="button" data-cmd="link">链接</button>
                   <button class="ef-btn small" type="button" data-cmd="clear">清格式</button>
                   <button class="ef-btn small" type="button" data-cmd="undo">撤销</button>
                   <button class="ef-btn small" type="button" data-cmd="redo">重做</button>
                 </div>
                 <div class="ef-prose admin-editor" id="editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="正文" spellcheck="false"></div>
-                <small>粘贴进来的是纯文字，格式会自动清掉。Ctrl/⌘ + S 直接保存。</small>
+                <input type="file" id="image-input" accept="image/*" multiple hidden />
+                <p class="admin-upload" id="upload-status" hidden></p>
+                <small>粘贴进来的是纯文字，格式会自动清掉；截图可以直接 Ctrl/⌘ + V 粘进来，也可以拖图片到正文里。大图会自动缩到长边 1600px 并转成 WebP。Ctrl/⌘ + S 直接保存。</small>
               </div>
 
               <datalist id="category-list">
