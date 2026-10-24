@@ -77,7 +77,9 @@ async function gh(path, { method = 'GET', body, raw = false } = {}) {
   if (body) headers['Content-Type'] = 'application/json';
 
   const send = () =>
-    fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined }).catch((e) => {
+    // cache: 'no-store' 很关键：GitHub 的 GET 响应带 max-age，命中缓存会读到旧的 ref，
+    // 之后基于旧 tree 提交就会 422（GitRPC::BadObjectState）。
+    fetch(url, { method, headers, cache: 'no-store', body: body ? JSON.stringify(body) : undefined }).catch((e) => {
       const err = new Error(
         `网络请求失败：${method} ${url}（${e.message}）。可能是代理/VPN 不稳定或浏览器扩展拦截，请稍后重试。`,
       );
