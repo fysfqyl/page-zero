@@ -1,0 +1,125 @@
+/* 枫叶随风的博客 —— 本站的布局与字体。
+   颜色、部件与动效全部来自 endfield.css；这里只写页面结构和自托管字体。 */
+
+/* 自托管界面字体：Saira（可变宽度与字重），SIL OFL 1.1，
+   许可证见 ./fonts/Saira-OFL.txt。中文使用系统中文字体。 */
+@font-face {
+  font-family: 'Saira';
+  src: url('./fonts/Saira.ttf') format('truetype');
+  font-weight: 100 900;
+  font-stretch: 50% 125%;
+  font-display: swap;
+}
+
+:root {
+  --ef-font-text: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+}
+
+/* 左栏导航 + 阅读栏 */
+.shell {
+  display: grid;
+  grid-template-columns: 12rem minmax(0, 1fr);
+  min-height: calc(100dvh - 3px);
+}
+.rail {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100dvh;
+}
+
+/* 品牌：宽体英文小字在上，中文粗体在下 */
+.ef-rail .brand {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  line-height: 1.25;
+}
+.ef-rail .brand small {
+  order: -1;
+  font-size: 0.56rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ef-ink-2);
+}
+.ef-rail .brand span {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.rail-util {
+  margin-left: auto;
+  padding-right: 1rem;
+}
+@media (min-width: 1100px) {
+  .rail-util {
+    margin: auto 1.25rem 1rem;
+    padding-right: 0;
+  }
+}
+
+/* 文章页头零件 */
+.title {
+  margin: 1.5rem 0 1rem;
+  font-size: clamp(var(--ef-t-title), 5.5vw, var(--ef-t-h1));
+  font-weight: 700;
+  line-height: 1.25;
+}
+.ids {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+}
+.ef-prose {
+  margin-top: 2rem;
+}
+.sect {
+  margin: 2.5rem 0 0;
+}
+.sect + .ef-prose {
+  margin-top: 1.25rem;
+}
+.nav-actions {
+  margin-top: 1.5rem;
+}
+
+.margin-h {
+  margin: 2.5rem 0 0.5rem;
+}
+.margin-h:first-child {
+  margin-top: 0;
+}
+
+/* 页脚 */
+.foot {
+  margin-top: 3rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--ef-rule);
+}
+.foot p {
+  margin: 0;
+}
+
+@media (max-width: 1099px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rail {
+    position: static;
+    height: auto;
+  }
+  .ef-rail .brand {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+  .ef-rail .brand span {
+    order: -1;
+  }
+  .ef-rail .brand small {
+    order: 0;
+  }
+}
