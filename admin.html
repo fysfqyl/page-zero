@@ -1,0 +1,375 @@
+<!doctype html>
+<!-- 枫叶随风的博客：后台（写文章 / 改文章 / 删文章）。
+     这一页不需要服务器：登录后浏览器直接用 GitHub API 读写仓库，
+     发布 = 提交一次 commit，GitHub Pages 收到后自动重新构建。
+     令牌只保存在这台设备的浏览器里，永远不会写进仓库。 -->
+<html lang="zh-CN" data-ef-variant="standard">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>后台 · 枫叶随风的博客</title>
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
+    <script>
+      try {
+        const t = localStorage.getItem('theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+    <meta name="theme-color" content="#F4F4F2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)" />
+    <script src="./assets/variant.js"></script>
+    <link rel="stylesheet" href="./assets/endfield.css" />
+    <link rel="stylesheet" href="./assets/site.css" />
+    <style>
+      /* 后台自己的几块：分栏表单、工具栏、可编辑正文、预览框。其余全部沿用 endfield.css。 */
+      [data-view][hidden],
+      .admin-split [hidden] {
+        display: none;
+      }
+      /* 有些元素自带 display（按钮、提示条），hidden 属性会被盖掉，这里补回来 */
+      [hidden] {
+        display: none !important;
+      }
+      .admin-split {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .admin-split > .field:first-child {
+        grid-column: span 2;
+      }
+      @media (max-width: 640px) {
+        .admin-split {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .admin-split > .field:first-child {
+          grid-column: auto;
+        }
+      }
+      .admin-row-main {
+        display: grid;
+        gap: 0.3rem;
+        min-width: 0;
+      }
+      .admin-row-main .name {
+        font-weight: 700;
+        overflow-wrap: anywhere;
+        text-decoration: none;
+      }
+      .admin-row-main .name:hover {
+        text-decoration: underline;
+        text-decoration-thickness: 0.35em;
+        text-underline-offset: -0.15em;
+        text-decoration-color: var(--ef-signal);
+      }
+      .admin-check {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+      }
+      .admin-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        padding: 0.45rem 0;
+        border-top: 1px solid var(--ef-rule);
+        border-bottom: 1px solid var(--ef-rule);
+      }
+      .admin-toolbar .ef-btn {
+        padding: 0.25rem 0.8rem 0.25rem 0.6rem;
+        font-size: 0.78rem;
+      }
+      .admin-editor {
+        min-height: 20rem;
+        max-width: none;
+        padding: 1rem 1.1rem;
+        border: 1px solid var(--ef-rule);
+        background: var(--ef-paper);
+        overflow-wrap: anywhere;
+      }
+      .admin-editor:empty::before {
+        content: '在这里写正文。回车分段，工具栏可以加小标题、加粗、引用、列表。';
+        color: var(--ef-ink-2);
+      }
+      .admin-editor p {
+        margin: 0 0 1rem;
+      }
+      .admin-editor h2 {
+        margin: 1.6rem 0 0.6rem;
+        font-size: var(--ef-t-h2);
+        font-weight: 700;
+      }
+      .admin-editor blockquote {
+        margin: 1rem 0;
+        padding-left: 0.9rem;
+        border-left: 3px solid var(--ef-signal);
+        color: var(--ef-ink-2);
+      }
+      .admin-editor ul,
+      .admin-editor ol {
+        margin: 0 0 1rem;
+        padding-left: 1.4rem;
+      }
+      .admin-editor:focus {
+        outline: 2px solid var(--ef-trace);
+        outline-offset: -1px;
+      }
+      .admin-preview {
+        width: min(1120px, 96vw);
+      }
+      .admin-preview .admin-preview-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.5rem 0.75rem;
+        background: var(--ef-panel);
+        border-bottom: 1px solid var(--ef-rule);
+      }
+      .admin-preview iframe {
+        display: block;
+        width: 100%;
+        height: min(78vh, 900px);
+        border: 0;
+        background: #fff;
+      }
+      details.admin-help {
+        padding: 0.6rem 0.85rem;
+        border: 1px solid var(--ef-rule);
+        background: var(--ef-panel);
+      }
+      details.admin-help summary {
+        cursor: pointer;
+        font-weight: 700;
+      }
+      details.admin-help ol {
+        margin: 0.6rem 0 0;
+        padding-left: 1.3rem;
+        line-height: 1.8;
+      }
+      .admin-status {
+        min-height: 1.4rem;
+      }
+      .admin-meter {
+        display: flex;
+        gap: 1rem;
+        font-family: var(--ef-font-ui);
+        font-size: 0.8rem;
+        color: var(--ef-ink-2);
+        font-variant-numeric: tabular-nums;
+      }
+    </style>
+  </head>
+  <body class="ef ef-contours">
+    <div class="ef-tri ef-in-sweep" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="shell">
+      <nav class="ef-rail rail" aria-label="主导航">
+        <a class="brand" href="./index.html"><small>Maple in Wind</small><span>枫叶随风</span></a>
+        <a href="./index.html">首页</a>
+        <a href="./admin.html" aria-current="page">后台</a>
+        <a href="https://github.com/fysfqyl/page-zero">仓库</a>
+        <div class="rail-util">
+          <button class="ef-btn small" type="button" data-theme-toggle>切换深浅</button>
+        </div>
+      </nav>
+
+      <article class="ef-spread">
+        <div class="ef-sheet">
+          <!-- 一、登录 -->
+          <section data-view="login" hidden>
+            <p class="ef-eyebrow slash">Admin</p>
+            <header class="ef-sheet-head">
+              <h1 class="ef-read">后台登录</h1>
+              <p class="ef-field">口令是一个 GitHub 令牌</p>
+            </header>
+            <p class="ef-lede ef-read">
+              这个后台直接读写 GitHub 仓库 fysfqyl/page-zero：写文章就是提交一次 commit，提交完 GitHub Pages 会自动重新构建。没有服务器，也没有密码，令牌只存在这台设备的浏览器里。
+            </p>
+
+            <p class="ef-notice" data-flag="安全">
+              请用 fine-grained 令牌，只授权 page-zero 这一个仓库、Contents 设为 Read and write，并设置过期时间。公共电脑上不要勾选“记住”。
+            </p>
+
+            <form id="login-form" class="ef-form" style="margin-top: 1.5rem">
+              <label class="field">
+                <span>GitHub 令牌</span>
+                <input id="f-token" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_… 或 ghp_…" required />
+                <small>创建入口：GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens</small>
+              </label>
+              <label class="admin-check">
+                <input id="f-remember" type="checkbox" checked />
+                在这台设备上记住（存 localStorage；不勾选则关掉浏览器就失效）
+              </label>
+              <p class="ef-actions">
+                <button class="ef-btn go" type="submit" id="login-btn">登录</button>
+                <a class="ef-btn" href="./index.html">返回首页</a>
+              </p>
+              <p class="ef-notice" data-flag="出错" id="login-error" hidden></p>
+            </form>
+
+            <details class="admin-help" style="margin-top: 1.5rem">
+              <summary>怎么创建这个令牌</summary>
+              <ol>
+                <li>打开 GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token。</li>
+                <li>Repository access 选 Only select repositories，只勾 page-zero。</li>
+                <li>Permissions → Repository permissions → Contents 设为 Read and write；如果列表里有 Pages，也设为 Read and write（可选）。</li>
+                <li>Expiration 选 90 天，Generate，把 github_pat_ 开头的那串复制下来，粘到上面。</li>
+                <li>令牌只显示一次；丢了就重新生成一个。</li>
+              </ol>
+            </details>
+          </section>
+
+          <!-- 二、文章列表 -->
+          <section data-view="list" hidden>
+            <p class="ef-eyebrow slash">Posts</p>
+            <header class="ef-sheet-head">
+              <h1 class="ef-read">文章管理</h1>
+              <p class="ef-field" id="post-count">共 0 篇</p>
+            </header>
+
+            <p class="ef-actions" style="margin-top: 1.25rem">
+              <button class="ef-btn go" type="button" id="btn-new">写新文章</button>
+              <button class="ef-btn" type="button" id="btn-reindex">重建索引</button>
+              <button class="ef-btn small" type="button" id="btn-logout">退出</button>
+            </p>
+
+            <p class="ef-notice admin-status" data-flag="状态" id="list-status" hidden></p>
+
+            <div id="list-empty" hidden>
+              <p class="ef-empty">
+                仓库的 posts/ 里还没有文章。点“写新文章”发布第一篇——它会是 No.001，首页列表会自动出现这一篇。
+              </p>
+            </div>
+
+            <ol class="ef-rows" id="post-list"></ol>
+          </section>
+
+          <!-- 三、编辑器 -->
+          <section data-view="editor" hidden>
+            <p class="ef-crumb ef-field">
+              <a href="#list" id="btn-back">文章管理</a><span id="editor-crumb">No.001</span>
+            </p>
+            <header class="ef-sheet-head">
+              <h1 class="ef-read" id="editor-title">写新文章</h1>
+              <p class="ef-field admin-meter">
+                <span id="word-count">0 字</span>
+                <span id="min-count">约 1 分钟</span>
+              </p>
+            </header>
+
+            <form id="post-form" class="ef-form" style="margin-top: 1.5rem">
+              <div class="admin-split">
+                <label class="field">
+                  <span>标题</span>
+                  <input id="f-title" name="title" maxlength="60" placeholder="例如：凌晨两点的便利店" required />
+                </label>
+                <label class="field">
+                  <span>编号</span>
+                  <input id="f-no" name="no" readonly />
+                </label>
+                <label class="field">
+                  <span>日期</span>
+                  <input id="f-date" name="date" type="date" required />
+                </label>
+                <label class="field">
+                  <span>分类</span>
+                  <input id="f-category" name="category" maxlength="10" list="category-list" placeholder="城市 / 天气 / 物件" />
+                </label>
+              </div>
+
+              <label class="field">
+                <span>导语</span>
+                <input id="f-lede" name="lede" maxlength="120" placeholder="一句话放在标题下面，也会写进搜索结果摘要" />
+                <small>留空也可以；留空时摘要用标题。</small>
+              </label>
+
+              <div class="field">
+                <span>正文</span>
+                <div class="admin-toolbar" role="toolbar" aria-label="正文格式">
+                  <button class="ef-btn small" type="button" data-cmd="formatBlock" data-value="h2">小标题</button>
+                  <button class="ef-btn small" type="button" data-cmd="formatBlock" data-value="p">正文</button>
+                  <button class="ef-btn small" type="button" data-cmd="bold">粗体</button>
+                  <button class="ef-btn small" type="button" data-cmd="italic">斜体</button>
+                  <button class="ef-btn small" type="button" data-cmd="formatBlock" data-value="blockquote">引用</button>
+                  <button class="ef-btn small" type="button" data-cmd="insertUnorderedList">列表</button>
+                  <button class="ef-btn small" type="button" data-cmd="insertOrderedList">编号</button>
+                  <button class="ef-btn small" type="button" data-cmd="link">链接</button>
+                  <button class="ef-btn small" type="button" data-cmd="clear">清格式</button>
+                  <button class="ef-btn small" type="button" data-cmd="undo">撤销</button>
+                  <button class="ef-btn small" type="button" data-cmd="redo">重做</button>
+                </div>
+                <div class="ef-prose admin-editor" id="editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="正文" spellcheck="false"></div>
+                <small>粘贴进来的是纯文字，格式会自动清掉。Ctrl/⌘ + S 直接保存。</small>
+              </div>
+
+              <datalist id="category-list">
+                <option value="城市"></option>
+                <option value="天气"></option>
+                <option value="物件"></option>
+                <option value="人物"></option>
+                <option value="书影"></option>
+                <option value="随笔"></option>
+              </datalist>
+
+              <p class="ef-notice" data-flag="出错" id="form-error" hidden></p>
+
+              <p class="ef-actions">
+                <button class="ef-btn go" type="submit" id="btn-save">发布文章</button>
+                <button class="ef-btn" type="button" id="btn-preview">预览</button>
+                <button class="ef-btn" type="button" id="btn-back-2">取消</button>
+                <button class="ef-btn danger" type="button" id="btn-delete" hidden>删除这篇</button>
+              </p>
+            </form>
+          </section>
+        </div>
+
+        <aside class="ef-margin" aria-label="后台说明">
+          <h2 class="ef-field margin-h">后台</h2>
+          <ul class="ef-ledger">
+            <li><span>仓库</span><span class="ef-field">fysfqyl/page-zero</span></li>
+            <li><span>分支</span><span class="ef-field">main</span></li>
+            <li><span>文章</span><span class="ef-field" id="side-count">0 篇</span></li>
+            <li><span>令牌</span><span class="ef-field" id="side-token">未登录</span></li>
+            <li><span>账号</span><span class="ef-field" id="side-user">—</span></li>
+          </ul>
+
+          <h2 class="ef-field margin-h">怎么工作</h2>
+          <ul class="ef-ledger">
+            <li><span>保存</span><span class="ef-field">提交一次 commit</span></li>
+            <li><span>发布</span><span class="ef-field">Pages 自动构建</span></li>
+            <li><span>上线</span><span class="ef-field">约 1 分钟</span></li>
+          </ul>
+
+          <h2 class="ef-field margin-h">注意</h2>
+          <p class="ef-field" style="line-height: 1.8">
+            后台每次保存都会重写整篇 posts/pNNN.html，同时更新 posts/index.json。如果直接在 GitHub 上改了某篇的 HTML，记得回后台点一次“重建索引”，首页的数字才会对上。
+          </p>
+        </aside>
+      </article>
+    </div>
+
+    <dialog id="confirm" class="ef-dialog">
+      <div class="ef-panel">
+        <p class="ef-eyebrow slash">Delete</p>
+        <h2>删除这篇文章？</h2>
+        <p id="confirm-text">文章会从仓库里删除，首页列表同步更新。</p>
+        <p class="ef-actions">
+          <button class="ef-btn" type="button" data-close>取消</button>
+          <button class="ef-btn danger" type="button" id="confirm-yes">删除</button>
+        </p>
+      </div>
+    </dialog>
+
+    <dialog id="preview" class="ef-dialog admin-preview">
+      <div class="admin-preview-bar">
+        <span class="ef-field">预览（还没提交）</span>
+        <button class="ef-btn small" type="button" data-close>关闭</button>
+      </div>
+      <iframe id="preview-frame" title="文章预览" sandbox="allow-same-origin"></iframe>
+    </dialog>
+
+    <script type="module" src="./assets/admin.js"></script>
+  </body>
+</html>
