@@ -11,7 +11,7 @@ const OWNER = 'fysfqyl';
 const REPO = 'page-zero';
 const BRANCH = 'main';
 const API = 'https://api.github.com';
-const REPO_API = `${API}/repos/${OWNER}/${REPO}`;
+const REPO_PATH = `/repos/${OWNER}/${REPO}`;
 const MANIFEST = 'posts/index.json';
 const TOKEN_KEY = 'pz.admin.token';
 
@@ -62,13 +62,28 @@ function friendly(status, message) {
 }
 
 async function gh(path, { method = 'GET', body, raw = false } = {}) {
+  // path 可以是 /repos/... 这样的相对路径，也可以是完整 URL；两种都认。
+  const url = /^https?:\/\//i.test(path) ? path : API + path;
   const headers = {
     Authorization: `Bearer ${token}`,
     Accept: raw ? 'application/vnd.github.raw' : 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
   };
   if (body) headers['Content-Type'] = 'application/json';
-  const res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+
+  const send = () =>
+    fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined }).catch((e) => {
+      const err = new Error(
+        `网络请求失败：${method} ${url}（${e.message}）。可能是代理/VPN 不稳定或浏览器扩展拦截，请稍后重试。`,
+      );
+      err.network = true;
+      throw err;
+    });
+
+  // 网络层抖动重试一次；HTTP 状态码错误不重试。
+  let res = await send();
+  if (!res.ok && res.status >= 500) res = await send();
+
   if (!res.ok) {
     let detail = '';
     try {
@@ -95,27 +110,27 @@ const readFile = async (path) => {
 // 一次 commit 写入多个文件（也可以删除：内容给 null）。base_tree 让没提到的文件保持原样。
 async function commit(changes, message) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const ref = await gh(`${REPO_API}/git/ref/heads/${BRANCH}`);
-    const head = await gh(`${REPO_API}/git/commits/${ref.object.sha}`);
+    const ref = await gh(`${REPO_PATH}/git/ref/heads/${BRANCH}`);
+    const head = await gh(`${REPO_PATH}/git/commits/${ref.object.sha}`);
     const tree = [];
     for (const [path, content] of Object.entries(changes)) {
       if (content === null) {
         tree.push({ path, mode: '100644', type: 'blob', sha: null });
       } else {
-        const blob = await gh(`${REPO_API}/git/blobs`, { method: 'POST', body: { content, encoding: 'utf-8' } });
+        const blob = await gh(`${REPO_PATH}/git/blobs`, { method: 'POST', body: { content, encoding: 'utf-8' } });
         tree.push({ path, mode: '100644', type: 'blob', sha: blob.sha });
       }
     }
-    const nextTree = await gh(`${REPO_API}/git/trees`, {
+    const nextTree = await gh(`${REPO_PATH}/git/trees`, {
       method: 'POST',
       body: { base_tree: head.tree.sha, tree },
     });
-    const made = await gh(`${REPO_API}/git/commits`, {
+    const made = await gh(`${REPO_PATH}/git/commits`, {
       method: 'POST',
       body: { message, tree: nextTree.sha, parents: [ref.object.sha] },
     });
     try {
-      await gh(`${REPO_API}/git/refs/heads/${BRANCH}`, { method: 'PATCH', body: { sha: made.sha, force: false } });
+      await gh(`${REPO_PATH}/git/refs/heads/${BRANCH}`, { method: 'PATCH', body: { sha: made.sha, force: false } });
       return made;
     } catch (e) {
       if (e.status === 422 || e.status === 409) continue; // 别人刚提交过：重来一次
@@ -360,7 +375,7 @@ function manifestText(list) {
 }
 
 async function scanPosts() {
-  const dir = await gh(`${REPO_API}/contents/posts`);
+  const dir = await gh(`${REPO_PATH}/contents/posts`);
   const files = (Array.isArray(dir) ? dir : []).filter((f) => f.type === 'file' && /^p\d{3,}\.html$/i.test(f.name));
   const out = [];
   for (const file of files) {
