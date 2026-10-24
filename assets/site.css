@@ -76,6 +76,28 @@
 .ef-prose {
   margin-top: 2rem;
 }
+/* 文章里的图片：整块铺满正文宽度，细线包边，图注用界面字体的小字 */
+.ef-prose figure {
+  margin: 2rem 0;
+}
+.ef-prose figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--ef-rule);
+  background: var(--ef-paper);
+}
+.ef-prose figcaption {
+  margin-top: 0.6rem;
+  font-family: var(--ef-font-ui);
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: var(--ef-ink-2);
+}
+.ef-prose img {
+  max-width: 100%;
+  height: auto;
+}
 .sect {
   margin: 2.5rem 0 0;
 }
