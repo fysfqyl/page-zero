@@ -1,0 +1,108 @@
+<!doctype html>
+<!-- 枫叶随风的博客：首页（阅读页）。外观只写在 <html> 的 data-ef-variant 上。
+     变体：标准（yellow / neutral / standard / contours / standard / full）
+     主视觉：// RECENT NOTES / 最近记录 下的编号记录列表，最新一篇的编号是黄色
+     页面类型：阅读（首页列表与文章页都是阅读页） -->
+<html lang="zh-CN" data-ef-variant="standard">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>最近记录 · 枫叶随风的博客</title>
+    <meta name="description" content="枫叶随风的博客：生活随笔，记录城市、天气与物件里的小事。文章按发布顺序编号。" />
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
+    <script>
+      try {
+        const t = localStorage.getItem('theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+    <meta name="theme-color" content="#F4F4F2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)" />
+    <script src="./assets/variant.js"></script>
+    <link rel="stylesheet" href="./assets/endfield.css" />
+    <link rel="stylesheet" href="./assets/site.css" />
+  </head>
+  <body class="ef ef-contours">
+    <div class="ef-tri ef-in-sweep" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="shell">
+      <nav class="ef-rail rail" aria-label="主导航">
+        <a class="brand" href="./index.html"><small>Maple in Wind</small><span>枫叶随风</span></a>
+        <a href="./index.html" aria-current="page">首页</a>
+        <a href="#about">关于</a>
+        <a href="https://github.com/fysfqyl/page-zero">仓库</a>
+        <div class="rail-util">
+          <button class="ef-btn small" type="button" data-theme-toggle>切换深浅</button>
+        </div>
+      </nav>
+
+      <article class="ef-spread">
+        <div class="ef-sheet">
+          <p class="ef-eyebrow slash">Recent Notes</p>
+          <header class="ef-sheet-head">
+            <h1 class="ef-read">最近记录</h1>
+            <p class="ef-field" data-fx-load>共 3 篇</p>
+          </header>
+          <ul class="ef-facts ef-field">
+            <li>2026.10.24</li>
+            <li>3 篇</li>
+            <li data-fx-load>898 字</li>
+            <li>枫叶随风的博客</li>
+          </ul>
+          <p class="ef-lede ef-read">一个生活随笔博客：记城市、天气与物件里的小事。文章按发布顺序编号，最新的一篇排在最上面。</p>
+
+          <ol class="ef-records">
+            <li style="--i: 0"><a class="ef-record ef-in-come" href="./posts/p001.html">
+              <span class="ef-tag is-current">No.001</span>
+              <time class="ef-field" datetime="2026-10-24">2026.10.24</time>
+              <span class="name ef-read">凌晨两点的便利店</span>
+              <span class="ef-field">316 字</span>
+            </a></li>
+            <li style="--i: 1"><a class="ef-record ef-in-come" href="./posts/p002.html">
+              <span class="ef-tag">No.002</span>
+              <time class="ef-field" datetime="2026-10-24">2026.10.24</time>
+              <span class="name ef-read">下雨天的声音</span>
+              <span class="ef-field">286 字</span>
+            </a></li>
+            <li style="--i: 2"><a class="ef-record ef-in-come" href="./posts/p003.html">
+              <span class="ef-tag">No.003</span>
+              <time class="ef-field" datetime="2026-10-24">2026.10.24</time>
+              <span class="name ef-read">旧手机里的照片</span>
+              <span class="ef-field">296 字</span>
+            </a></li>
+          </ol>
+
+          <h2 class="ef-pair sect" id="about"><span class="ef-eyebrow slash">About</span><span>关于本站</span></h2>
+          <div class="ef-prose">
+            <p>这里是一个个人博客，笔名枫叶随风。写的是生活里的小事：城市的角落、天气的声音、抽屉里的旧物。文章按发布顺序编号，不设专栏，想起来就写。</p>
+            <p>整站是静态页面，没有框架：一套自制的界面样式，自托管的拉丁字体，托管在 GitHub Pages。深色浅色两套主题；系统打开“减少动态效果”后，页面上所有动效都会静止。</p>
+          </div>
+
+          <footer class="foot">
+            <p class="ef-field">枫叶随风的博客 │ 2026.10.24 │ GitHub Pages</p>
+          </footer>
+        </div>
+
+        <aside class="ef-margin" aria-label="统计与说明">
+          <h2 class="ef-field margin-h">按分类</h2>
+          <ul class="ef-ledger">
+            <li><span>城市</span><span class="ef-field">1 篇</span></li>
+            <li><span>天气</span><span class="ef-field">1 篇</span></li>
+            <li><span>物件</span><span class="ef-field">1 篇</span></li>
+            <li><span>合计</span><span class="ef-field">3 篇</span></li>
+          </ul>
+          <h2 class="ef-field margin-h">建站</h2>
+          <ul class="ef-ledger">
+            <li><span>托管</span><span class="ef-field">GitHub Pages</span></li>
+            <li><span>最后更新</span><span class="ef-field">2026.10.24</span></li>
+          </ul>
+        </aside>
+      </article>
+    </div>
+
+    <script type="module">
+      import { wireTheme, wireReadouts } from './assets/fx.js';
+      wireTheme();
+      wireReadouts(document);
+    </script>
+  </body>
+</html>
