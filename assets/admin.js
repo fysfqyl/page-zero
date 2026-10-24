@@ -115,6 +115,7 @@ const readFile = async (path) => {
 };
 
 // 一次 commit 写入多个文件（也可以删除：内容给 null）。base_tree 让没提到的文件保持原样。
+// 文本文件传字符串；图片传 { base64 }。
 async function commit(changes, message) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const ref = await gh(`${REPO_PATH}/git/ref/heads/${BRANCH}`);
@@ -123,9 +124,17 @@ async function commit(changes, message) {
     for (const [path, content] of Object.entries(changes)) {
       if (content === null) {
         tree.push({ path, mode: '100644', type: 'blob', sha: null });
-      } else {
+      } else if (typeof content === 'string') {
         const blob = await gh(`${REPO_PATH}/git/blobs`, { method: 'POST', body: { content, encoding: 'utf-8' } });
         tree.push({ path, mode: '100644', type: 'blob', sha: blob.sha });
+      } else if (content && content.base64) {
+        const blob = await gh(`${REPO_PATH}/git/blobs`, {
+          method: 'POST',
+          body: { content: content.base64, encoding: 'base64' },
+        });
+        tree.push({ path, mode: '100644', type: 'blob', sha: blob.sha });
+      } else {
+        throw new Error(`提交内容格式不对：${path}`);
       }
     }
     const nextTree = await gh(`${REPO_PATH}/git/trees`, {
@@ -200,8 +209,9 @@ function normalizeBody(html) {
 
 const ALLOWED = new Set([
   'P', 'H2', 'H3', 'H4', 'STRONG', 'B', 'EM', 'I', 'U', 'S', 'BR', 'HR',
-  'A', 'BLOCKQUOTE', 'UL', 'OL', 'LI', 'CODE', 'PRE', 'SPAN', 'DIV', 'FIGURE', 'FIGCAPTION',
+  'A', 'BLOCKQUOTE', 'UL', 'OL', 'LI', 'CODE', 'PRE', 'SPAN', 'DIV', 'FIGURE', 'FIGCAPTION', 'IMG',
 ]);
+const IMG_ATTRS = ['alt', 'title', 'width', 'height', 'loading'];
 const DROP = /^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|LINK|META|FORM|INPUT|BUTTON|TEXTAREA|SELECT|NAV|FOOTER|HEADER|SVG)$/;
 
 function cleanBody(html) {
@@ -230,6 +240,18 @@ function cleanBody(html) {
           }
           return;
         }
+        if (el.tagName === 'IMG') {
+          if (name === 'src') {
+            // 相对路径、站点内路径，以及编辑期间临时的 blob: 都留着
+            if (!/^(https?:\/\/|\.{0,2}\/|assets\/|blob:|data:image\/)/i.test(attr.value.trim())) {
+              el.removeAttribute(attr.name);
+            }
+            return;
+          }
+          if (IMG_ATTRS.includes(name)) return;
+          el.removeAttribute(attr.name);
+          return;
+        }
         el.removeAttribute(attr.name); // 其他属性一律去掉（style、class、on* …）
       });
       walk(el);
@@ -240,6 +262,161 @@ function cleanBody(html) {
   holder.appendChild(tpl.content.cloneNode(true));
   return holder.innerHTML.trim();
 }
+
+/* ---------- 图片：挑图、压缩、暂存 ---------- */
+
+const UPLOAD_DIR = 'assets/uploads';
+const MAX_FILE = 12 * 1024 * 1024; // 单张上限
+const MAX_EDGE = 1600; // 长边超过就缩到这个尺寸
+const CAPTION_HINT = '图片说明（可删）';
+
+// blob: URL -> { path, base64, size, name }
+const pendingUploads = new Map();
+
+function toBase64(bytes) {
+  let binary = '';
+  const chunk = 0x8000; // String.fromCharCode(...) 一次塞太多会爆栈
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+async function shortHash(bytes) {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 10);
+}
+
+// 大图缩到 1600px 并转 webp；gif / svg 原样保留
+async function encodeImage(file) {
+  const EXT = { 'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/svg+xml': 'svg' };
+  let blob = file;
+  let ext = EXT[file.type] || (file.name.split('.').pop() || 'bin').toLowerCase();
+  const skip = /^image\/(gif|svg\+xml)$/.test(file.type);
+
+  if (!skip && typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(file).catch(() => null);
+    if (bitmap) {
+      const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+      const heavy = file.size > 420 * 1024;
+      if (scale < 1 || (heavy && file.type !== 'image/webp')) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        const out = await new Promise((done) => canvas.toBlob(done, 'image/webp', 0.86));
+        if (out && out.size < file.size) {
+          blob = out;
+          ext = 'webp';
+        }
+      }
+      bitmap.close?.();
+    }
+  }
+
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const hash = await shortHash(bytes);
+  return { path: `${UPLOAD_DIR}/${hash}.${ext}`, base64: toBase64(bytes), size: bytes.length, blob };
+}
+
+const groupBytes = (n) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+function syncUploadStatus() {
+  const box = $('#upload-status');
+  if (!box) return;
+  const total = [...pendingUploads.values()].reduce((sum, x) => sum + x.size, 0);
+  box.hidden = !pendingUploads.size;
+  box.textContent = pendingUploads.size ? `待上传 ${pendingUploads.size} 张图（${groupBytes(total)}），会随发布一起提交` : '';
+}
+
+function clearPending() {
+  [...pendingUploads.keys()].forEach((url) => URL.revokeObjectURL(url));
+  pendingUploads.clear();
+  syncUploadStatus();
+}
+
+// 把图片插到光标处（一个 figure + 可编辑图注）
+function insertFigure(upload, blobUrl, name) {
+  const alt = esc(name.replace(/\.[^.]+$/, '').replace(/[<>"]/g, ''));
+  const html = `<figure><img src="${blobUrl}" alt="${alt}" loading="lazy"><figcaption>${CAPTION_HINT}</figcaption></figure>`;
+  const editor = $('#editor');
+  editor.focus();
+  document.execCommand('insertHTML', false, html);
+  syncCounts();
+}
+
+async function addImages(files) {
+  const picked = [...files].filter((f) => f && /^image\//.test(f.type));
+  if (!picked.length) return;
+  for (const file of picked) {
+    if (file.size > MAX_FILE) {
+      toast(`图片太大，跳过了：${file.name}`);
+      continue;
+    }
+    try {
+      const img = await encodeImage(file);
+      const url = URL.createObjectURL(img.blob);
+      pendingUploads.set(url, { path: img.path, base64: img.base64, size: img.size, name: file.name });
+      insertFigure(img, url, file.name);
+      if (img.size < file.size * 0.9) {
+        toast(`已压缩：${groupBytes(file.size)} → ${groupBytes(img.size)}`);
+      }
+    } catch (err) {
+      toast(`处理失败：${file.name}`);
+      console.warn(err);
+    }
+  }
+  syncUploadStatus();
+}
+
+// 发布前把编辑期的 blob: 地址换成站点里的真实路径，并收集要上传的图片
+function materializeImages(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html || '';
+  const images = [];
+  const seen = new Set();
+
+  [...tpl.content.querySelectorAll('img')].forEach((img) => {
+    const src = img.getAttribute('src') || '';
+    if (!src.startsWith('blob:')) return;
+    const item = pendingUploads.get(src);
+    if (!item) {
+      img.remove();
+      return;
+    }
+    img.setAttribute('src', `../${item.path}`);
+    if (!seen.has(item.path)) {
+      seen.add(item.path);
+      images.push({ path: item.path, base64: item.base64 });
+    }
+  });
+
+  const holder = document.createElement('div');
+  holder.appendChild(tpl.content.cloneNode(true));
+  return { html: holder.innerHTML, images };
+}
+
+// 去掉没写内容的图注（占位文字或空）
+function dropHintCaptions(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html || '';
+  tpl.content.querySelectorAll('figcaption').forEach((cap) => {
+    const text = (cap.textContent || '').trim();
+    if (!text || text === CAPTION_HINT) cap.remove();
+  });
+  const holder = document.createElement('div');
+  holder.appendChild(tpl.content.cloneNode(true));
+  return holder.innerHTML;
+}
+
+const uploadsIn = (html) => [
+  ...new Set([...String(html || '').matchAll(/assets\/uploads\/[A-Za-z0-9._-]+/g)].map((m) => m[0])),
+];
 
 /* ---------- 生成文章页面 ---------- */
 
@@ -465,7 +642,12 @@ function renderList() {
 /* ---------- 编辑器 ---------- */
 
 function syncCounts() {
-  const n = countChars($('#editor').innerHTML);
+  // 图注占位文字不算字数
+  const clone = $('#editor').cloneNode(true);
+  clone.querySelectorAll('figcaption').forEach((cap) => {
+    if ((cap.textContent || '').trim() === CAPTION_HINT) cap.remove();
+  });
+  const n = countChars(clone.innerHTML);
   $('#word-count').textContent = `${group(n)} 字`;
   $('#min-count').textContent = `约 ${minutes(n)} 分钟`;
 }
@@ -478,6 +660,7 @@ function showFormError(text) {
 
 async function openEditor(entry) {
   showFormError('');
+  clearPending();
   const nextNo = posts.reduce((max, p) => Math.max(max, Number(p.no) || 0), 0) + 1;
 
   editing = entry
@@ -515,24 +698,32 @@ async function openEditor(entry) {
   if (!entry) $('#f-title').focus();
 }
 
-function readForm() {
+function readForm({ materialize = false } = {}) {
+  let html = dropHintCaptions(cleanBody($('#editor').innerHTML));
+  let images = [];
+  if (materialize) {
+    const done = materializeImages(html);
+    html = done.html;
+    images = done.images;
+  }
   return {
     title: $('#f-title').value.trim(),
     date: $('#f-date').value || today(),
     category: $('#f-category').value.trim() || '随笔',
     lede: $('#f-lede').value.trim(),
-    body: normalizeBody(cleanBody($('#editor').innerHTML)),
+    body: normalizeBody(html),
+    images,
   };
 }
 
 async function savePost(btn) {
   if (busy) return;
   showFormError('');
-  const data = readForm();
+  const data = readForm({ materialize: true });
   const chars = countChars(data.body);
 
   if (!data.title) return showFormError('标题还没有写。');
-  if (!chars) return showFormError('正文还是空的。');
+  if (!chars && !data.images.length) return showFormError('正文还是空的。');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data.date)) return showFormError('日期格式不对，应该是 2026-10-24。');
 
   const entry = {
@@ -546,14 +737,18 @@ async function savePost(btn) {
   const nextList = [...posts.filter((p) => p.no !== entry.no), entry].sort((a, b) => a.no - b.no);
   const page = buildPage({ ...entry, lede: data.lede, body: data.body }, nextList);
 
+  const changes = { [`posts/${entry.file}`]: page, [MANIFEST]: manifestText(nextList) };
+  data.images.forEach((img) => {
+    changes[img.path] = { base64: img.base64 };
+  });
+  const extra = data.images.length ? `（含 ${data.images.length} 张图）` : '';
+
   busy = true;
   btn.setAttribute('aria-busy', 'true');
   try {
-    await commit(
-      { [`posts/${entry.file}`]: page, [MANIFEST]: manifestText(nextList) },
-      `${editing.isNew ? '新建' : '更新'}文章 No.${pad(entry.no)}《${entry.title}》`,
-    );
+    await commit(changes, `${editing.isNew ? '新建' : '更新'}文章 No.${pad(entry.no)}《${entry.title}》${extra}`);
     posts = nextList;
+    clearPending();
     renderList();
     showView('list');
     setStatus(`《${entry.title}》已${editing.isNew ? '发布' : '保存'}，GitHub Pages 正在构建，约 1 分钟后上线。`, '完成');
@@ -581,10 +776,21 @@ async function doDelete() {
   yes.setAttribute('aria-busy', 'true');
   try {
     const nextList = posts.filter((p) => p.no !== entry.no);
-    await commit(
-      { [`posts/${entry.file}`]: null, [MANIFEST]: manifestText(nextList) },
-      `删除文章 No.${pad(entry.no)}《${entry.title}》`,
-    );
+
+    // 顺手清掉这篇用过的图片：只删没有被其他文章引用的
+    const changes = { [`posts/${entry.file}`]: null, [MANIFEST]: manifestText(nextList) };
+    const mine = uploadsIn(await readFile(`posts/${entry.file}`));
+    if (mine.length) {
+      const shared = new Set();
+      for (const other of posts.filter((p) => p.file !== entry.file)) {
+        uploadsIn(await readFile(`posts/${other.file}`)).forEach((u) => shared.add(u));
+      }
+      mine.filter((u) => !shared.has(u)).forEach((u) => {
+        changes[u] = null;
+      });
+    }
+
+    await commit(changes, `删除文章 No.${pad(entry.no)}《${entry.title}》`);
     posts = nextList;
     renderList();
     await closeDialog($('#confirm'));
@@ -817,7 +1023,23 @@ try {
 } catch {}
 
 $('#editor').addEventListener('input', syncCounts);
-$('#editor').addEventListener('paste', (e) => {
+
+// 工具栏「图片」：选文件（可多选）
+$('#btn-image').addEventListener('click', () => $('#image-input').click());
+$('#image-input').addEventListener('change', async (e) => {
+  const files = [...e.target.files];
+  e.target.value = ''; // 同一个文件能再选一次
+  await addImages(files);
+});
+
+// 粘贴：有图片就插图，否则按纯文本插入
+$('#editor').addEventListener('paste', async (e) => {
+  const items = [...(e.clipboardData?.items || [])].filter((i) => i.kind === 'file' && /^image\//.test(i.type));
+  if (items.length) {
+    e.preventDefault();
+    await addImages(items.map((i) => i.getAsFile()).filter(Boolean));
+    return;
+  }
   e.preventDefault();
   const text = (e.clipboardData || window.clipboardData).getData('text/plain') || '';
   const html = text
@@ -826,6 +1048,24 @@ $('#editor').addEventListener('paste', (e) => {
     .join('');
   document.execCommand('insertHTML', false, html);
   syncCounts();
+});
+
+// 拖图片进正文
+$('#editor').addEventListener('dragover', (e) => {
+  if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault();
+});
+$('#editor').addEventListener('drop', async (e) => {
+  const files = [...(e.dataTransfer?.files || [])].filter((f) => /^image\//.test(f.type));
+  if (!files.length) return;
+  e.preventDefault();
+  // 把光标放到落点，图片插在那儿
+  const range = document.caretRangeFromPoint?.(e.clientX, e.clientY);
+  if (range) {
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  await addImages(files);
 });
 
 $('#btn-preview').addEventListener('click', () => {
