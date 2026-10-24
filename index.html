@@ -2,7 +2,9 @@
 <!-- 枫叶随风的博客：首页（阅读页）。外观只写在 <html> 的 data-ef-variant 上。
      变体：标准（yellow / neutral / standard / contours / standard / full）
      主视觉：// RECENT NOTES / 最近记录 下的编号记录列表，最新一篇的编号是黄色
-     页面类型：阅读（首页列表与文章页都是阅读页） -->
+     页面类型：阅读（首页列表与文章页都是阅读页）
+     数据：下面的静态列表是没开 JS 时的兜底；页面加载后会读取 ./posts/index.json
+     重排列表、字数与分类统计。发布新文章后这里会自动出现，不需要手改这个文件。 -->
 <html lang="zh-CN" data-ef-variant="standard">
   <head>
     <meta charset="utf-8" />
@@ -40,17 +42,17 @@
           <p class="ef-eyebrow slash">Recent Notes</p>
           <header class="ef-sheet-head">
             <h1 class="ef-read">最近记录</h1>
-            <p class="ef-field" data-fx-load>共 3 篇</p>
+            <p class="ef-field" data-stat-count>共 3 篇</p>
           </header>
           <ul class="ef-facts ef-field">
-            <li>2026.10.24</li>
-            <li>3 篇</li>
-            <li data-fx-load>898 字</li>
+            <li data-stat-date>2026.10.24</li>
+            <li data-stat-count2>3 篇</li>
+            <li data-fx-load data-stat-words>898 字</li>
             <li>枫叶随风的博客</li>
           </ul>
           <p class="ef-lede ef-read">一个生活随笔博客：记城市、天气与物件里的小事。文章按发布顺序编号，最新的一篇排在最上面。</p>
 
-          <ol class="ef-records">
+          <ol class="ef-records" data-records>
             <li style="--i: 0"><a class="ef-record ef-in-come" href="./posts/p001.html">
               <span class="ef-tag is-current">No.001</span>
               <time class="ef-field" datetime="2026-10-24">2026.10.24</time>
@@ -78,13 +80,13 @@
           </div>
 
           <footer class="foot">
-            <p class="ef-field">枫叶随风的博客 │ 2026.10.24 │ GitHub Pages</p>
+            <p class="ef-field">枫叶随风的博客 │ 2026.10.24 │ GitHub Pages │ <a href="./admin.html">管理</a></p>
           </footer>
         </div>
 
         <aside class="ef-margin" aria-label="统计与说明">
           <h2 class="ef-field margin-h">按分类</h2>
-          <ul class="ef-ledger">
+          <ul class="ef-ledger" data-cats>
             <li><span>城市</span><span class="ef-field">1 篇</span></li>
             <li><span>天气</span><span class="ef-field">1 篇</span></li>
             <li><span>物件</span><span class="ef-field">1 篇</span></li>
@@ -93,7 +95,8 @@
           <h2 class="ef-field margin-h">建站</h2>
           <ul class="ef-ledger">
             <li><span>托管</span><span class="ef-field">GitHub Pages</span></li>
-            <li><span>最后更新</span><span class="ef-field">2026.10.24</span></li>
+            <li><span>最后更新</span><span class="ef-field" data-stat-updated>2026.10.24</span></li>
+            <li><span>写作</span><span class="ef-field"><a href="./admin.html">后台</a></span></li>
           </ul>
         </aside>
       </article>
@@ -101,7 +104,65 @@
 
     <script type="module">
       import { wireTheme, wireReadouts } from './assets/fx.js';
+
+      const pad = (n) => String(n).padStart(3, '0');
+      const dots = (date) => String(date || '').replace(/-/g, '.');
+      const group = (n) => Number(n || 0).toLocaleString('zh-CN');
+
+      // 只有一处 HTML 拼接，标题来自帖子索引，仍然转义一遍。
+      const esc = (s) =>
+        String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+      function renderIndex(raw) {
+        const posts = (Array.isArray(raw) ? raw : []).filter((p) => p && Number.isFinite(Number(p.no)));
+        if (!posts.length) return;
+        posts.sort((a, b) => Number(b.no) - Number(a.no)); // 最新的排在最上面
+
+        const list = document.querySelector('[data-records]');
+        if (list) {
+          list.innerHTML = posts
+            .map(
+              (p, i) => `<li style="--i: ${Math.min(i, 12)}"><a class="ef-record ef-in-come" href="./posts/${esc(p.file)}">
+              <span class="ef-tag${i === 0 ? ' is-current' : ''}">No.${pad(p.no)}</span>
+              <time class="ef-field" datetime="${esc(p.date)}">${dots(p.date)}</time>
+              <span class="name ef-read">${esc(p.title)}</span>
+              <span class="ef-field">${group(p.words)} 字</span>
+            </a></li>`,
+            )
+            .join('');
+        }
+
+        const total = posts.reduce((sum, p) => sum + Number(p.words || 0), 0);
+        const latest = posts.reduce((d, p) => (p.date > d ? p.date : d), posts[0].date || '');
+
+        const set = (sel, text) => {
+          const el = document.querySelector(sel);
+          if (el) el.textContent = text;
+        };
+        set('[data-stat-count]', `共 ${posts.length} 篇`);
+        set('[data-stat-count2]', `${posts.length} 篇`);
+        set('[data-stat-words]', `${group(total)} 字`);
+        set('[data-stat-date]', dots(latest));
+        set('[data-stat-updated]', dots(latest));
+
+        const cats = new Map();
+        posts.forEach((p) => cats.set(p.category || '未分类', (cats.get(p.category || '未分类') || 0) + 1));
+        const ledger = document.querySelector('[data-cats]');
+        if (ledger) {
+          const rows = [...cats.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-CN'));
+          ledger.innerHTML =
+            rows.map(([name, n]) => `<li><span>${esc(name)}</span><span class="ef-field">${n} 篇</span></li>`).join('') +
+            `<li><span>合计</span><span class="ef-field">${posts.length} 篇</span></li>`;
+        }
+      }
+
       wireTheme();
+      try {
+        const res = await fetch('./posts/index.json', { cache: 'no-cache' });
+        if (res.ok) renderIndex((await res.json()).posts);
+      } catch (e) {
+        // 离线或索引还没生成：保留上面手写的列表
+      }
       wireReadouts(document);
     </script>
   </body>
