@@ -256,7 +256,10 @@ function buildPage(post, list) {
     .slice(0, 2)
     .sort((a, b) => a.no - b.no);
 
-  const description = `${post.lede || post.title} 第零页生活随笔 ${no}。`;
+  // 导语自带句号时不再补空格，中英文混排都好看一点
+  const ledeText = String(post.lede || post.title).trim();
+  const glue = /[。！？!?.”」』]$/.test(ledeText) ? '' : ' ';
+  const description = `${ledeText}${glue}第零页生活随笔 ${no}。`;
 
   const record = (p) => `<li><a class="ef-record" href="${esc(p.file)}">
   <span class="ef-tag">No.${pad(p.no)}</span>
