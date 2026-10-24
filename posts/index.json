@@ -1,0 +1,30 @@
+{
+  "site": "枫叶随风的博客",
+  "updated": "2026-10-24",
+  "posts": [
+    {
+      "no": 1,
+      "file": "p001.html",
+      "title": "凌晨两点的便利店",
+      "date": "2026-10-24",
+      "category": "城市",
+      "words": 316
+    },
+    {
+      "no": 2,
+      "file": "p002.html",
+      "title": "下雨天的声音",
+      "date": "2026-10-24",
+      "category": "天气",
+      "words": 286
+    },
+    {
+      "no": 3,
+      "file": "p003.html",
+      "title": "旧手机里的照片",
+      "date": "2026-10-24",
+      "category": "物件",
+      "words": 296
+    }
+  ]
+}
